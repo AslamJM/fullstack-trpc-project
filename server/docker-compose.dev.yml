@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  app-server:
+    build:
+      context: .
+      target: development
+      args:
+        NODE_ENV: development
+    volumes:
+      - ./:/home/app
+      - /home/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - MONGO_USER=aslamjm
+      - MONGO_PASSWORD=password
+
+    ports:
+      - 5000:5000  
+
+    command: npm run dev
+
+  mongo:
+    image: mongo  
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=aslamjm
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongo-db:/data/db
+
+  redis:
+    image: redis
+    volumes:
+      - redis-data:/data      
+
+volumes:
+  mongo-db:
+  redis-data:        
