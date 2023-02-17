@@ -3,6 +3,9 @@ import {
   registerSchema,
   verifyEmailSchema,
   loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  passwordResetCodeSchema,
 } from "../schemas/auth.schema";
 import { transporter } from "../utils/mailer";
 import { UserModel } from "../models/user.model";
@@ -98,6 +101,39 @@ export const authRouter = trpc.router({
       }
     }),
 
+  confirmPasswordCode: trpc.procedure
+    .input(passwordResetCodeSchema)
+    .query(async ({ input }) => {
+      const { code, email } = input;
+      try {
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "your email is not registered",
+          });
+        }
+        if (code !== user.passwordResetCode) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "wrong reset code",
+          });
+        }
+
+        user.passwordResetCode = "";
+        return {
+          status: "success",
+          message: "password reset code accepted",
+        };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: error.code,
+          message: error.message,
+        });
+      }
+    }),
+
   loginByEmail: trpc.procedure
     .input(loginSchema)
     .mutation(async ({ input }) => {
@@ -151,4 +187,71 @@ export const authRouter = trpc.router({
       message: "logged out successfully",
     };
   }),
+
+  forgotPassword: trpc.procedure
+    .input(forgotPasswordSchema)
+    .mutation(async ({ input }) => {
+      const { email } = input;
+      try {
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "your email is not registered",
+          });
+        }
+
+        const resetCode = Math.random().toString(36).substring(2, 15);
+
+        user.passwordResetCode = resetCode;
+        await user.save();
+
+        const info = await transporter.sendMail({
+          from: "admin@app.com",
+          to: user.email,
+          subject: "confirm your email",
+          text: `your password reset code is ${resetCode}`,
+        });
+        console.log(nodemailer.getTestMessageUrl(info));
+
+        return {
+          status: "success",
+          message: "password reset code was sent to your email",
+        };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: error.code,
+          message: error.message,
+        });
+      }
+    }),
+
+  changePassword: trpc.procedure
+    .input(resetPasswordSchema)
+    .mutation(async ({ input }) => {
+      const { password, email } = input;
+      try {
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "your email is not registered",
+          });
+        }
+        user.password = password;
+        await user.save();
+
+        return {
+          status: "success",
+          message: "password changed successfully",
+        };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: error.code,
+          message: error.message,
+        });
+      }
+    }),
 });
